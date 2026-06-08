@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -49,4 +48,229 @@
         .history-item-info { display: flex; flex-direction: column; }
         .history-date { font-size: 10px; color: var(--text-muted); }
 
-        .btn-reset { background: transparent; color: var(--danger); font-size: 11px; margin-top:
+        .btn-reset { background: transparent; color: var(--danger); font-size: 11px; margin-top: 10px; border: none; text-decoration: underline; opacity: 0.5; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>INSS Analytics 📈</h1>
+            <p>Técnico do Seguro Social</p>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card" style="background: rgba(99, 102, 241, 0.1);">
+                <div class="stat-label">Acertos %</div>
+                <div class="stat-value" id="geral-porcentagem">0%</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Total Qs</div>
+                <div class="stat-value" id="geral-total">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Acerto/Erro</div>
+                <div class="stat-value" id="geral-bruto" style="font-size: 14px; padding-top: 6px;">0/0</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">📝 Registrar Sessão</div>
+            <div class="form-group">
+                <select id="materia" onchange="carregarAssuntos()">
+                    <option value="Direito Previdenciário">Direito Previdenciário</option>
+                    <option value="Português">Português</option>
+                    <option value="Direito Administrativo">Direito Administrativo</option>
+                    <option value="Direito Constitucional">Direito Constitucional</option>
+                    <option value="Raciocínio Lógico Matemático">Raciocínio Lógico Matemático</option>
+                    <option value="Informática">Informática</option>
+                    <option value="Ética no Serviço Público">Ética no Serviço Público</option>
+                </select>
+                <select id="assunto"></select>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <input type="number" id="acertos" placeholder="Acertos" min="0" onfocus="this.select()">
+                    <input type="number" id="erros" placeholder="Erros" min="0" onfocus="this.select()">
+                </div>
+                <button onclick="registrar()">Salvar Desempenho</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">📉 Evolução Geral (%)</div>
+            <div class="chart-box">
+                <canvas id="chartLinha"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">📊 Aproveitamento por Assunto</div>
+            <select id="filtroMateria" onchange="renderizarGráficos()" style="margin-bottom: 15px; border-color: var(--accent);"></select>
+            <div class="chart-box" style="height: 300px;">
+                <canvas id="chartBarras"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">🕒 Últimas Atividades</div>
+            <div id="historico" class="history-list"></div>
+            <button class="btn-reset" onclick="reset()">Limpar todos os dados</button>
+        </div>
+    </div>
+
+    <script>
+        // EDITAL COMPLETO INSS
+        const edital = {
+            "Direito Previdenciário": ["Seguridade Social: Origem e Evolução", "Organização e Princípios Constitucionais", "RGPS: Segurados Obrigatórios e Facultativos", "Filiação e Inscrição", "Custeio: Alíquotas e Contribuições", "Benefícios: Aposentadorias e Auxílios", "Pensão por Morte e Auxílio-Reclusão", "Salário-Família e Salário-Maternidade", "LOAS (BPC)", "Crimes contra a Seguridade"],
+            "Português": ["Compreensão e Intelecção de Textos", "Tipologia Textual", "Ortografia Oficial", "Acentuação Gráfica", "Morfologia (Classes de Palavras)", "Sintaxe da Oração e Período", "Concordância Nominal e Verbal", "Regência Nominal e Verbal", "Emprego do Sinal de Crase", "Pontuação"],
+            "Direito Administrativo": ["Estado, Governo e Administração Pública", "Atos Administrativos", "Poderes da Administração", "Lei 8.112/90 (Estatuto)", "Licitações (Lei 14.133/21)", "Processo Administrativo", "Responsabilidade Civil do Estado", "Improbidade Administrativa"],
+            "Direito Constitucional": ["Direitos e Garantias Fundamentais", "Direitos Sociais", "Nacionalidade e Direitos Políticos", "Organização do Estado", "Administração Pública (Arts 37 a 41)", "Poder Judiciário (Noções)"],
+            "Raciocínio Lógico Matemático": ["Lógica de Proposições", "Conectivos e Tabelas-Verdade", "Equivalências e Negações", "Lógica de Argumentação", "Diagramas Lógicos", "Análise Combinatória", "Probabilidade"],
+            "Informática": ["Windows 10/11", "Suítes de Escritório (Office/LibreOffice)", "Segurança da Informação", "Redes de Computadores", "Internet e Navegadores", "Computação em Nuvem"],
+            "Ética no Serviço Público": ["Ética e Moral", "Código de Ética (Decreto 1.171/94)", "Processo Ético na Comissão de Ética"]
+        };
+
+        let dados = JSON.parse(localStorage.getItem('db_inss')) || [];
+
+        // Inicialização
+        document.getElementById('filtroMateria').innerHTML = document.getElementById('materia').innerHTML;
+        carregarAssuntos();
+        renderizarTelas();
+
+        function carregarAssuntos() {
+            const m = document.getElementById('materia').value;
+            const s = document.getElementById('assunto');
+            s.innerHTML = edital[m].map(a => `<option value="${a}">${a}</option>`).join('');
+        }
+
+        function registrar() {
+            const ac = parseInt(document.getElementById('acertos').value) || 0;
+            const er = parseInt(document.getElementById('erros').value) || 0;
+            if (ac === 0 && er === 0) return;
+
+            const entry = {
+                materia: document.getElementById('materia').value,
+                assunto: document.getElementById('assunto').value,
+                acertos: ac,
+                erros: er,
+                data: new Date().toLocaleDateString('pt-BR')
+            };
+
+            dados.push(entry);
+            localStorage.setItem('db_inss', JSON.stringify(dados));
+            renderizarTelas();
+            
+            document.getElementById('acertos').value = "";
+            document.getElementById('erros').value = "";
+        }
+
+        function renderizarTelas() {
+            // Totais
+            let totalA = 0, totalE = 0;
+            dados.forEach(d => { totalA += d.acertos; totalE += d.erros; });
+            const totalQ = totalA + totalE;
+            const perc = totalQ > 0 ? Math.round((totalA / totalQ) * 100) : 0;
+
+            document.getElementById('geral-porcentagem').innerText = perc + "%";
+            document.getElementById('geral-total').innerText = totalQ;
+            document.getElementById('geral-bruto').innerText = `${totalA}/${totalE}`;
+
+            // Histórico
+            const histDiv = document.getElementById('historico');
+            histDiv.innerHTML = dados.slice().reverse().map(d => `
+                <div class="history-item">
+                    <div class="history-item-info">
+                        <span><strong>${d.assunto}</strong></span>
+                        <span class="history-date">${d.materia} • ${d.data}</span>
+                    </div>
+                    <div style="font-weight:700">
+                        <span class="text-success">${d.acertos}</span>/<span class="text-danger">${d.erros}</span>
+                    </div>
+                </div>
+            `).join('');
+
+            renderizarGráficos();
+        }
+
+        let chartL, chartB;
+
+        function renderizarGráficos() {
+            if (chartL) chartL.destroy();
+            if (chartB) chartB.destroy();
+
+            // Lógica do Gráfico de Linha (Evolução)
+            let somaA = 0, somaE = 0;
+            const pontosLinha = dados.map(d => {
+                somaA += d.acertos;
+                somaE += d.erros;
+                return Math.round((somaA / (somaA + somaE)) * 100);
+            });
+
+            chartL = new Chart(document.getElementById('chartLinha'), {
+                type: 'line',
+                data: {
+                    labels: dados.map((_, i) => i + 1),
+                    datasets: [{
+                        data: pontosLinha,
+                        borderColor: '#6366f1',
+                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        borderWidth: 2,
+                        pointRadius: 2
+                    }]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false, 
+                    plugins: { legend: { display: false } },
+                    scales: { 
+                        y: { min: 0, max: 100, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                        x: { display: false }
+                    }
+                }
+            });
+
+            // Lógica do Gráfico de Barras (Por Assunto)
+            const matFiltro = document.getElementById('filtroMateria').value;
+            const assuntosDaMateria = edital[matFiltro];
+            
+            const performancePorAssunto = assuntosDaMateria.map(ass => {
+                let a = 0, e = 0;
+                dados.filter(d => d.assunto === ass).forEach(d => { a += d.acertos; e += d.erros; });
+                return (a + e) > 0 ? Math.round((a / (a + e)) * 100) : 0;
+            });
+
+            chartB = new Chart(document.getElementById('chartBarras'), {
+                type: 'bar',
+                data: {
+                    labels: assuntosDaMateria.map(a => a.substring(0, 25) + '...'),
+                    datasets: [{
+                        data: performancePorAssunto,
+                        backgroundColor: performancePorAssunto.map(v => v >= 70 ? '#10b981' : v >= 50 ? '#f59e0b' : '#ef4444'),
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { min: 0, max: 100, ticks: { color: '#64748b' }, grid: { display: false } },
+                        y: { ticks: { color: '#fff', font: { size: 9 } }, grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        function reset() {
+            if (confirm("Apagar todos os registros?")) {
+                localStorage.removeItem('db_inss');
+                dados = [];
+                renderizarTelas();
+            }
+        }
+    </script>
+</body>
+</html>
+
