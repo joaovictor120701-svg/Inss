@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>INSS - Desempenho por Assunto</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #060818 0%, #0b112c 100%);
+            --card-bg: rgba(22, 28, 69, 0.65);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --accent: #6366f1;
+            --success: #10b981;
+            --danger: #ef4444;
+            --text-main: #ffffff;
+            --text-muted: #94a3b8;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        body { background: var(--bg-gradient); color: var(--text-main); min-height: 100vh; padding: 15px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        
+        header { margin: 10px 0 20px 0; }
+        header h1 { font-size: 24px; font-weight: 700; }
+        header p { color: var(--text-muted); font-size: 14px; }
+
+        .grid-dashboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px; }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 14px;
+            padding: 16px;
+            backdrop-filter: blur(12px);
+            margin-bottom: 15px;
+        }
+
+        .card-title { font-size: 11px; color: var(--text-muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .metric-value { font-size: 22px; font-weight: 700; }
+        
+        .form-group { display: flex; flex-direction: column; gap: 10px; margin-top: 5px; }
+        label { font-size: 12px; color: var(--text-muted); }
+        select, input, button { padding: 12px; border-radius: 8px; border: 1px solid var(--card-border); background: rgba(255, 255, 255, 0.06); color: white; font-size: 14px; width: 100%; }
+        button { background: var(--accent); font-weight: 600; border: none; cursor: pointer; }
+        
+        .history-list { max-height: 150px; overflow-y: auto; margin-top: 10px; }
+        .history-item { display: flex; justify-content: space-between; font-size: 11px; padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+
+        .btn-danger { background: #1e293b; font-size: 11px; padding: 6px; margin-top: 15px; border: none; color: #94a3b8; }
+        .btn-danger:hover { background: var(--danger); color: white; }
+
+        .chart-container { position: relative; height: 240px; }
+        .text-success { color: var(--success); }
+        .text-danger { color: var(--danger); }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>Foco INSS 🎯</h1>
+            <p>Técnico do Seguro Social • Análise por Assunto</p>
+        </header>
+
+        <div class="grid-dashboard">
+            <div class="card" style="background: linear-gradient(135deg, #1e1b4b 0%, #2e1065 100%); padding: 12px;">
+                <div class="card-title">Geral</div>
+                <div class="metric-value" id="txt-aproveitamento">0%</div>
+            </div>
+            <div class="card" style="padding: 12px;">
+                <div class="card-title">Qtd. Total</div>
+                <div class="metric-value" id="txt-total">0</div>
+            </div>
+            <div class="card" style="padding: 12px;">
+                <div class="card-title">Acerto/Erro</div>
+                <div class="metric-value" style="font-size: 16px; margin-top: 5px;">
+                    <span class="text-success" id="txt-acertos">0</span>/<span class="text-danger" id="txt-erros">0</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Inserir Rendimento</div>
+            <div class="form-group">
+                <div>
+                    <label>Disciplina:</label>
+                    <select id="sel-materia" onchange="atualizarAssuntos()">
+                        <option value="Direito Previdenciário">Direito Previdenciário</option>
+                        <option value="Língua Portuguesa">Língua Portuguesa</option>
+                        <option value="Direito Administrativo">Direito Administrativo</option>
+                        <option value="Direito Constitucional">Direito Constitucional</option>
+                        <option value="Raciocínio Lógico Matemático">Raciocínio Lógico Matemático</option>
+                        <option value="Informática">Noções de Informática</option>
+                        <option value="Ética no Serviço Público">Ética no Serviço Público</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Assunto Específico:</label>
+                    <select id="sel-assunto"></select>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div>
+                        <label>Acertos:</label>
+                        <input type="number" id="num-acertos" value="0" min="0" onfocus="this.select()">
+                    </div>
+                    <div>
+                        <label>Erros:</label>
+                        <input type="number" id="num-erros" value="0" min="0" onfocus="this.select()">
+                    </div>
+                </div>
+                <button onclick="salvarDados()">Computar Rendimento</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Visualizar Gráfico da Matéria:</div>
+            <select id="filtro-grafico" onchange="calcularTelas()" style="margin-bottom: 10px; background: rgba(255,255,255,0.1);"></select>
+            <div class="chart-container">
+                <canvas id="chartBarras"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Últimos Lançamentos</div>
+            <div class="history-list" id="lista-historico"></div>
+            <button class="btn-danger" onclick="limparHistorico()">Resetar Todos os Dados</button>
+        </div>
+    </div>
+
+    <script>
+        // Mapeamento completo do Edital
+        const mapaEdital = {
+            "Direito Previdenciário": ["Seguridade Social na CF", "Legislação Previdenciária", "Regime Geral (RGPS)", "Benefícios em Espécie", "Financiamento do RGPS"],
+            "Língua Portuguesa": ["Compreensão de Texto", "Tipologia Textual", "Ortografia/Acentuação", "Morfologia (Classes)", "Sintaxe da Oração", "Pontuação/Crase"],
+            "Direito Administrativo": ["Estado e Organização", "Atos Administrativos", "Poderes da Adm.", "Lei 8.112/90 (Regime)", "Licitações e Contratos", "Responsabilidade do Estado"],
+            "Direito Constitucional": ["Direitos Fundamentais", "Direitos Sociais", "Nacionalidade e Políticos", "Organização do Estado", "Administração Pública na CF"],
+            "Raciocínio Lógico Matemático": ["Estruturas Lógicas", "Lógica de Argumentação", "Diagramas Lógicos", "Análise Combinatória", "Probabilidade"],
+            "Noções de Informática": ["Sistemas Operacionais", "Suítes de Escritório", "Redes e Internet", "Segurança da Informação", "Nuvem (Cloud)"],
+            "Ética no Serviço Público": ["Ética e Moral", "Decreto 1.171/94 (Código)", "Lei 8.429/92 (Improbidade)"]
+        };
+
+        let historico = JSON.parse(localStorage.getItem('inss_assuntos_dados')) || [];
+
+        // Inicializar menus de seleção
+        const selMateria = document.getElementById('sel-materia');
+        const filtroGrafico = document.getElementById('filtro-grafico');
+        
+        // Preenche o filtro do gráfico com as mesmas matérias
+        filtroGrafico.innerHTML = selMateria.innerHTML;
+
+        function atualizarAssuntos() {
+            const materia = selMateria.value;
+            const selAssunto = document.getElementById('sel-assunto');
+            selAssunto.innerHTML = "";
+            
+            mapaEdital[materia].forEach(assunto => {
+                selAssunto.innerHTML += `<option value="${assunto}">${assunto}</option>`;
+            });
+        }
+
+        // Gráfico de Barras Horizontal
+        const ctxBarras = document.getElementById('chartBarras').getContext('2d');
+        const chartBarras = new Chart(ctxBarras, {
+            type: 'bar',
+            data: { labels: [], datasets: [{ data: [], backgroundColor: '#6366f1', borderRadius: 4 }] },
+            options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { min: 0, max: 100, ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }, y: { ticks: { color: '#94a3b8' }, grid: { display: false } } } }
+        });
+
+        function calcularTelas() {
+            const listaDiv = document.getElementById('lista-historico');
+            listaDiv.innerHTML = "";
+
+            if(historico.length === 0) {
+                document.getElementById('txt-aproveitamento').innerText = "0%";
+                document.getElementById('txt-total').innerText = "0";
+                document.getElementById('txt-acertos').innerText = "0";
+                document.getElementById('txt-erros').innerText = "0";
+                chartBarras.data.labels = [];
+                chartBarras.data.datasets[0].data = [];
+                chartBarras.update();
+                return;
+            }
+
+            let totalAcertos = 0;
+            let totalErros = 0;
+            
+            // Matéria atualmente selecionada para o gráfico
+            const materiaFiltro = filtroGrafico.value;
+            let listaAssuntosFiltro = mapaEdital[materiaFiltro];
+            let porAssunto = {};
+            listaAssuntosFiltro.forEach(a => porAssunto[a] = { acertos: 0, total: 0 });
+
+            // Processar histórico
+            historico.forEach(item => {
+                totalAcertos += item.acertos;
+                totalErros += item.erros;
+
+                // Se o item for da matéria filtrada, soma no assunto correspondente
+                if (item.materia === materiaFiltro && porAssunto[item.assunto]) {
+                    porAssunto[item.assunto].acertos += item.acertos;
+                    porAssunto[item.assunto].total += (item.acertos + item.erros);
+                }
+
+                listaDiv.innerHTML += `
+                    <div class="history-item">
+                        <span><strong>[${item.materia}]</strong> ${item.assunto}</span>
+                        <span>${item.acertos}A / ${item.erros}E</span>
+                    </div>
+                `;
+            });
+
+            // Totais Gerais
+            let totalGeral = totalAcertos + totalErros;
+            let aproveitamentoGeral = totalGeral > 0 ? Math.round((totalAcertos / totalGeral) * 100) : 0;
+
+            document.getElementById('txt-aproveitamento').innerText = aproveitamentoGeral + "%";
+            document.getElementById('txt-total').innerText = totalGeral;
+            document.getElementById('txt-acertos').innerText = totalAcertos;
+            document.getElementById('txt-erros').innerText = totalErros;
+
+            // Atualizar dados do gráfico baseado no assunto
+            chartBarras.data.labels = listaAssuntosFiltro;
+            chartBarras.data.datasets[0].data = listaAssuntosFiltro.map(a => {
+                let d = porAssunto[a];
+                return d.total > 0 ? Math.round((d.acertos / d.total) * 100) : 0;
+            });
+            chartBarras.update();
+        }
+
+        function salvarDados() {
+            const materia = selMateria.value;
+            const assunto = document.getElementById('sel-assunto').value;
+            const acertos = parseInt(document.getElementById('num-acertos').value) || 0;
+            const erros = parseInt(document.getElementById('num-erros').value) || 0;
+
+            if(acertos === 0 && erros === 0) return;
+
+            historico.push({ materia, assunto, acertos, erros });
+            localStorage.setItem('inss_assuntos_dados', JSON.stringify(historico));
+
+            document.getElementById('num-acertos').value = "0";
+            document.getElementById('num-erros').value = "0";
+
+            calcularTelas();
+        }
+
+        function limparHistorico() {
+            if(confirm("Deseja apagar todo o histórico de assuntos?")) {
+                localStorage.removeItem('inss_assuntos_dados');
+                historico = [];
+                calcularTelas();
+            }
+        }
+
+        // Inicialização primária
+        atualizarAssuntos();
+        calcularTelas();
+    </script>
+</body>
+</html>
